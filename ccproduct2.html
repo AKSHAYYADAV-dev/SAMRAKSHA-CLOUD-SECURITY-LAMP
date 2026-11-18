@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SAMRAKSHA // HOSPITAL CLOUD TELEMETRY & ANDON CONTROL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #06080C;
+      --bg-panel: #0A0D14;
+      --bg-elevated: #0F141E;
+      --border-dim: #18202E;
+      --border-bright: #28354A;
+      --text-primary: #E2E8F0;
+      --text-secondary: #8B9BB4;
+      --text-muted: #4B5B76;
+
+      /* Industrial LED Spectrum */
+      --c-red: #FF2A4B;
+      --c-amber: #FFB000;
+      --c-blue: #00D2FF;
+      --c-green: #00E676;
+
+      --active-accent: var(--c-green);
+      --active-glow: rgba(0, 230, 118, 0.14);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      background-image: 
+        linear-gradient(to right, rgba(24, 32, 46, 0.35) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(24, 32, 46, 0.35) 1px, transparent 1px);
+      background-size: 32px 32px;
+      color: var(--text-primary);
+      font-family: 'Inter', -apple-system, sans-serif;
+      font-size: 13px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* TOP COMMAND BAR */
+    .topbar {
+      height: 48px;
+      background: rgba(10, 13, 20, 0.92);
+      border-bottom: 1px solid var(--border-dim);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      backdrop-filter: blur(8px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand-cluster {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .status-beacon {
+      width: 10px;
+      height: 10px;
+      background: var(--active-accent);
+      box-shadow: 0 0 12px var(--active-accent);
+      transition: all 0.2s ease;
+    }
+
+    .brand-title {
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      font-size: 12px;
+      color: var(--text-primary);
+    }
+
+    .brand-sub {
+      color: var(--text-muted);
+      padding-left: 12px;
+      border-left: 1px solid var(--border-dim);
+      font-size: 11px;
+    }
+
+    .telemetry-strip {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      font-size: 11px;
+    }
+
+    .strip-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .strip-label {
+      color: var(--text-muted);
+    }
+
+    .strip-val {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .aws-endpoint-pill {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-bright);
+      padding: 4px 10px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .aws-endpoint-pill:hover {
+      border-color: var(--active-accent);
+      color: var(--text-primary);
+    }
+
+    /* MAIN WORKSPACE GRID */
+    .workspace {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 340px 1fr 410px;
+      gap: 1px;
+      background: var(--border-dim);
+      border-bottom: 1px solid var(--border-dim);
+    }
+
+    @media (max-width: 1280px) {
+      .workspace {
+        grid-template-columns: 320px 1fr;
+      }
+      .col-right {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 860px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--bg-panel);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .panel-header {
+      height: 36px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--border-dim);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      background: rgba(15, 20, 30, 0.5);
+    }
+
+    /* INDUSTRIAL 4-TIER ANDON TOWER HARDWARE */
+    .hardware-bay {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 20px;
+      position: relative;
+      background: radial-gradient(circle at 50% 42%, var(--active-glow), transparent 68%);
+      transition: background 0.3s ease;
+    }
+
+    .hardware-grid-overlay {
+      position: absolute;
+      inset: 12px;
+      border: 1px dashed rgba(40, 53, 74, 0.45);
+      pointer-events: none;
+    }
+
+    .corner-mark {
+      position: absolute;
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .cm-tl { top: 18px; left: 20px; }
+    .cm-tr { top: 18px; right: 20px; }
+    .cm-bl { bottom: 18px; left: 20px; }
+    .cm-br { bottom: 18px; right: 20px; }
+
+    /* Stack Light Assembly */
+    .andon-assembly {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 2;
+    }
+
+    .andon-cap {
+      width: 96px;
+      height: 18px;
+      background: linear-gradient(90deg, #161B24 0%, #343F52 50%, #161B24 100%);
+      border: 1px solid #435168;
+      border-radius: 6px 6px 0 0;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+    }
+
+    .andon-segment {
+      width: 92px;
+      height: 54px;
+      position: relative;
+      border-left: 1px solid rgba(255,255,255,0.12);
+      border-right: 1px solid rgba(255,255,255,0.12);
+      border-bottom: 2px solid #0E131B;
+      transition: all 0.18s ease;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Internal Fresnel Ridges */
+    .andon-segment::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.38) 0px,
+        rgba(0, 0, 0, 0.38) 2px,
+        transparent 2px,
+        transparent 5px
+      );
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    /* Specular Cylindrical Highlight */
+    .andon-segment::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 14px;
+      width: 16px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.28), transparent);
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .seg-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: rgba(255,255,255,0.22);
+      z-index: 4;
+    }
+
+    /* Unlit Base States */
+    .seg-red { background: linear-gradient(90deg, #1F070C, #3B0C16, #1F070C); }
+    .seg-amber { background: linear-gradient(90deg, #211704, #3D2B07, #211704); }
+    .seg-blue { background: linear-gradient(90deg, #041924, #083247, #041924); }
+    .seg-green { background: linear-gradient(90deg, #041F12, #093B23, #041F12); }
+
+    /* Lit Active States */
+    .seg-red.active {
+      background: radial-gradient(circle at 50% 50%, #FFFFFF 2%, #FF2A4B 48%, #7A0016 100%);
+      box-shadow: 0 0 42px #FF2A4B, 0 0 85px rgba(255, 42, 75, 0.65);
+      border-color: #FF8FA0;
+    }
+    .seg-amber.active {
+      background: radial-gradient(circle at 50% 50%, #FFFFFF 2%, #FFB000 48%, #704B00 100%);
+      box-shadow: 0 0 42px #FFB000, 0 0 85px rgba(255, 176, 0, 0.55);
+      border-color: #FFE082;
+    }
+    .seg-blue.active {
+      background: radial-gradient(circle at 50% 50%, #FFFFFF 2%, #00D2FF 48%, #004E66 100%);
+      box-shadow: 0 0 42px #00D2FF, 0 0 85px rgba(0, 210, 255, 0.55);
+      border-color: #99EDFF;
+    }
+    .seg-green.active {
+      background: radial-gradient(circle at 50% 50%, #FFFFFF 2%, #00E676 48%, #00572A 100%);
+      box-shadow: 0 0 38px #00E676, 0 0 70px rgba(0, 230, 118, 0.45);
+      border-color: #99FFC9;
+    }
+
+    .andon-segment.active .seg-label {
+      color: #05080C;
+      background: rgba(255,255,255,0.85);
+      padding: 1px 5px;
+      border-radius: 2px;
+    }
+
+    @keyframes hardware-pulse {
+      0%, 100% { opacity: 1; filter: brightness(1.15); }
+      50% { opacity: 0.25; filter: brightness(0.5); }
+    }
+
+    .strobe-fast {
+      animation: hardware-pulse 0.36s infinite ease-in-out;
+    }
+
+    .strobe-slow {
+      animation: hardware-pulse 0.85s infinite ease-in-out;
+    }
+
+    .andon-base-collar {
+      width: 98px;
+      height: 24px;
+      background: linear-gradient(90deg, #121721, #2D3748, #121721);
+      border: 1px solid #3A465E;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 8px;
+    }
+
+    .piezo-slot {
+      width: 4px;
+      height: 12px;
+      background: #06080C;
+      border-radius: 1px;
+    }
+
+    .andon-pole {
+      width: 28px;
+      height: 46px;
+      background: linear-gradient(90deg, #1A202C, #4A5568, #1A202C);
+      border-left: 1px solid #4A5568;
+      border-right: 1px solid #1A202C;
+    }
+
+    .andon-mount {
+      width: 132px;
+      height: 22px;
+      background: linear-gradient(90deg, #0D111A, #222B3B, #0D111A);
+      border: 1px solid #334155;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      color: var(--text-secondary);
+      letter-spacing: 1.5px;
+    }
+
+    /* HARDWARE TELEMETRY SPECS FOOTER */
+    .hw-specs {
+      border-top: 1px solid var(--border-dim);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--border-dim);
+    }
+
+    .hw-spec-cell {
+      background: var(--bg-panel);
+      padding: 12px 14px;
+    }
+
+    .spec-k {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    .spec-v {
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 4px;
+      color: var(--text-primary);
+    }
+
+    /* CENTER COLUMN: THREAT MATRIX, WAVEFORM & AUDIT LOG */
+    .col-center {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      background: var(--border-dim);
+    }
+
+    .sub-panel {
+      background: var(--bg-panel);
+      padding: 16px 20px;
+    }
+
+    .scenario-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .vector-btn {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-dim);
+      padding: 12px 14px;
+      text-align: left;
+      color: var(--text-primary);
+      cursor: pointer;
+      position: relative;
+      transition: all 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .vector-btn::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--btn-color);
+    }
+
+    .vector-btn:hover {
+      border-color: var(--border-bright);
+      background: #141B29;
+    }
+
+    .vector-btn.selected {
+      border-color: var(--btn-color);
+      background: rgba(255, 255, 255, 0.03);
+      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .v-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .v-code {
+      color: var(--btn-color);
+      font-weight: 700;
+    }
+
+    .v-shortcut {
+      color: var(--text-muted);
+      border: 1px solid var(--border-dim);
+      padding: 1px 5px;
+      font-size: 10px;
+    }
+
+    .v-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+
+    .v-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.35;
+    }
+
+    /* HOSPITAL VLAN TOPOLOGY MATRIX */
+    .vlan-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .vlan-node {
+      background: #070A0F;
+      border: 1px solid var(--border-dim);
+      padding: 10px 12px;
+    }
+
+    .vlan-node.compromised {
+      border-color: var(--active-accent);
+      background: rgba(255, 42, 75, 0.06);
+    }
+
+    .node-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .node-name {
+      font-weight: 600;
+      font-size: 11px;
+      color: var(--text-primary);
+    }
+
+    .node-status {
+      font-size: 10px;
+      margin-top: 4px;
+      color: var(--c-green);
+    }
+
+    /* REAL-TIME WAVEFORM OSCILLOSCOPE */
+    .scope-wrap {
+      position: relative;
+      height: 105px;
+      background: #05070B;
+      border: 1px solid var(--border-dim);
+      margin-top: 10px;
+      overflow: hidden;
+    }
+
+    canvas#telemetry-scope {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .scope-overlay {
+      position: absolute;
+      top: 8px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--text-secondary);
+      pointer-events: none;
+    }
+
+    /* AUDIT LOG TABLE */
+    .log-container {
+      flex: 1;
+      background: var(--bg-panel);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    .data-table th {
+      text-align: left;
+      padding: 8px 16px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-dim);
+      font-weight: 500;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.6px;
+    }
+
+    .data-table td {
+      padding: 9px 16px;
+      border-bottom: 1px solid rgba(24, 32, 46, 0.6);
+      color: var(--text-secondary);
+    }
+
+    .data-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .sev-pill {
+      display: inline-block;
+      padding: 2px 6px;
+      font-size: 10px;
+      font-weight: 700;
+      border: 1px solid currentColor;
+    }
+
+    /* RIGHT COLUMN: AWS IOT SHADOW & CLOUD PIPELINE */
+    .col-right {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      background: var(--border-dim);
+    }
+
+    .pipeline-flow {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: #070A0F;
+      border: 1px solid var(--border-dim);
+      margin-top: 10px;
+      font-size: 10px;
+    }
+
+    .pipe-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      color: var(--text-secondary);
+    }
+
+    .pipe-box {
+      padding: 4px 8px;
+      border: 1px solid var(--border-bright);
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .code-inspector {
+      flex: 1;
+      background: #05070B;
+      padding: 16px;
+      overflow-x: auto;
+      font-size: 11.5px;
+      line-height: 1.55;
+      color: #94A3B8;
+      border-top: 1px solid var(--border-dim);
+    }
+
+    .json-key { color: #38BDF8; }
+    .json-str { color: #A7F3D0; }
+    .json-bool { color: #FBBF24; }
+
+    /* MODAL FOR AWS LAMBDA URL */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 5, 8, 0.82);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-window {
+      width: 520px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-bright);
+      padding: 20px;
+    }
+
+    .input-field {
+      width: 100%;
+      background: #05070B;
+      border: 1px solid var(--border-bright);
+      color: var(--text-primary);
+      padding: 10px 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      margin: 12px 0;
+      outline: none;
+    }
+
+    .input-field:focus {
+      border-color: var(--c-blue);
+    }
+
+    .btn-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .cmd-btn {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-bright);
+      color: var(--text-primary);
+      padding: 7px 14px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      cursor: pointer;
+    }
+
+    .cmd-btn.primary {
+      background: var(--c-blue);
+      color: #05070B;
+      border-color: var(--c-blue);
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP COMMAND HEADER -->
+  <header class="topbar">
+    <div class="brand-cluster">
+      <div class="status-beacon" id="header-beacon"></div>
+      <span class="brand-title mono">SAMRAKSHA // HOSPITAL SOC</span>
+      <span class="brand-sub mono">HOSPITAL CLOUD INFRASTRUCTURE & BIO-STORAGE TELEMETRY</span>
+    </div>
+
+    <div class="telemetry-strip mono">
+      <div class="strip-item">
+        <span class="strip-label">REGION:</span>
+        <span class="strip-val">ap-south-1</span>
+      </div>
+      <div class="strip-item">
+        <span class="strip-label">THING_ID:</span>
+        <span class="strip-val">CloudSecurityAlertLamp</span>
+      </div>
+      <div class="strip-item">
+        <span class="strip-label">UTC:</span>
+        <span class="strip-val" id="live-clock">00:00:00</span>
+      </div>
+      <div class="aws-endpoint-pill" onclick="toggleAwsModal(true)">
+        <span id="aws-conn-dot" style="color:var(--c-amber);">●</span>
+        <span id="aws-conn-label">ENGINE: LOCAL SHADOW SIM</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN 3-COLUMN ENTERPRISE GRID -->
+  <main class="workspace">
+
+    <!-- COLUMN 1: INDUSTRIAL 4-TIER ANDON SIGNAL TOWER -->
+    <section class="panel">
+      <div class="panel-header">
+        <span>01 // PHYSICAL DIGITAL TWIN</span>
+        <span class="mono" style="color:var(--text-muted);">PATLITE-4T-IOT</span>
+      </div>
+
+      <div class="hardware-bay">
+        <div class="hardware-grid-overlay"></div>
+        <span class="corner-mark cm-tl">+ 00.0</span>
+        <span class="corner-mark cm-tr">CH_01</span>
+        <span class="corner-mark cm-bl">IP65_SOC</span>
+        <span class="corner-mark cm-br" id="lamp-hz-readout">0.0 Hz</span>
+
+        <div class="andon-assembly">
+          <div class="andon-cap"></div>
+
+          <!-- TIER 1: RED (CRITICAL BREACH / RANSOMWARE) -->
+          <div class="andon-segment seg-red" id="tier-red">
+            <span class="seg-label">L1 // CRIT</span>
+          </div>
+
+          <!-- TIER 2: AMBER (IAM / UNAUTHORIZED ACCESS) -->
+          <div class="andon-segment seg-amber" id="tier-amber">
+            <span class="seg-label">L2 // WARN</span>
+          </div>
+
+          <!-- TIER 3: BLUE (BIO-COLD CHAIN / IOT TELEMETRY) -->
+          <div class="andon-segment seg-blue" id="tier-blue">
+            <span class="seg-label">L3 // BIOM</span>
+          </div>
+
+          <!-- TIER 4: GREEN (HIPAA / EHR NOMINAL) -->
+          <div class="andon-segment seg-green active" id="tier-green">
+            <span class="seg-label">L4 // NOMN</span>
+          </div>
+
+          <!-- PIEZO SIREN COLLAR -->
+          <div class="andon-base-collar" title="85dB Piezo Acoustic Transducer">
+            <div class="piezo-slot"></div>
+            <div class="piezo-slot"></div>
+            <div class="piezo-slot"></div>
+            <div class="piezo-slot"></div>
+            <div class="piezo-slot"></div>
+            <div class="piezo-slot"></div>
+          </div>
+
+          <div class="andon-pole"></div>
+          <div class="andon-mount">SAMRAKSHA // NODE-01</div>
+        </div>
+      </div>
+
+      <!-- HARDWARE DIAGNOSTICS -->
+      <div class="hw-specs mono">
+        <div class="hw-spec-cell">
+          <div class="spec-k">ACTIVE TIER STATE</div>
+          <div class="spec-v" id="spec-tier">L4_GREEN // NOMINAL</div>
+        </div>
+        <div class="hw-spec-cell">
+          <div class="spec-k">PIEZO TRANSDUCER</div>
+          <div class="spec-v" id="spec-siren">0 dB (SILENT)</div>
+        </div>
+        <div class="hw-spec-cell">
+          <div class="spec-k">SOURCE ENDPOINT</div>
+          <div class="spec-v" id="spec-ip">10.20.4.12</div>
+        </div>
+        <div class="hw-spec-cell">
+          <div class="spec-k">COMPLIANCE AUDIT</div>
+          <div class="spec-v" id="spec-compliance">HIPAA_VERIFIED</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLUMN 2: THREAT INJECTION MATRIX, WAVEFORM & AUDIT LOG -->
+    <section class="col-center">
+
+      <!-- THREAT SIMULATOR -->
+      <div class="sub-panel">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:11px; font-weight:600; letter-spacing:1px; color:var(--text-secondary); text-transform:uppercase;">
+            02 // CLOUD EVENT INJECTION VECTORS (KEYBOARD 1-4)
+          </span>
+
+          <label class="mono" style="font-size:11px; color:var(--text-secondary); cursor:pointer; display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="audio-mute" /> MUTE PIEZO AUDIO
+          </label>
+        </div>
+
+        <div class="scenario-grid">
+          <button class="vector-btn selected" id="btn-SECURE" style="--btn-color: var(--c-green);" onclick="dispatchEventState('SECURE')">
+            <div class="v-top">
+              <span class="v-code">STATE_01 // NOMINAL</span>
+              <span class="v-shortcut">KEY [1]</span>
+            </div>
+            <div class="v-title">Samraksha EHR & Lab Healthy</div>
+            <div class="v-desc">All patient S3 buckets KMS-encrypted. Pathology & ICU gateways reporting zero packet loss.</div>
+          </button>
+
+          <button class="vector-btn" id="btn-WARNING" style="--btn-color: var(--c-amber);" onclick="dispatchEventState('WARNING')">
+            <div class="v-top">
+              <span class="v-code">STATE_02 // IAM_ANOMALY</span>
+              <span class="v-shortcut">KEY [2]</span>
+            </div>
+            <div class="v-title">Toxicology DB Brute-Force Auth</div>
+            <div class="v-desc">Multiple failed IAM assume-role attempts on Pathology DB from external subnet.</div>
+          </button>
+
+          <button class="vector-btn" id="btn-BIO_HAZARD" style="--btn-color: var(--c-blue);" onclick="dispatchEventState('BIO_HAZARD')">
+            <div class="v-top">
+              <span class="v-code">STATE_03 // COLD_CHAIN</span>
+              <span class="v-shortcut">KEY [3]</span>
+            </div>
+            <div class="v-title">Blood Bank Telemetry Spoofing</div>
+            <div class="v-desc">Cryo-freezer MQTT heartbeat drop (-2.1°C drift) & unauthorized sensor firmware payload.</div>
+          </button>
+
+          <button class="vector-btn" id="btn-CRITICAL" style="--btn-color: var(--c-red);" onclick="dispatchEventState('CRITICAL')">
+            <div class="v-top">
+              <span class="v-code">STATE_04 // EXFILTRATION</span>
+              <span class="v-shortcut">KEY [4]</span>
+            </div>
+            <div class="v-title">Patient EHR S3 Bucket Public Breach</div>
+            <div class="v-desc">PutBucketPublicAccessBlock disabled on patient records + high-velocity KMS decrypt spike.</div>
+          </button>
+        </div>
+
+        <!-- HOSPITAL SUBNET TOPOLOGY -->
+        <div class="vlan-strip mono">
+          <div class="vlan-node" id="vlan-1">
+            <div class="node-head"><span>VLAN_10</span><span>KMS_AES256</span></div>
+            <div class="node-name">Samraksha EHR Vault</div>
+            <div class="node-status" id="vst-1">● SECURE</div>
+          </div>
+          <div class="vlan-node" id="vlan-2">
+            <div class="node-head"><span>VLAN_20</span><span>RDS_IAM</span></div>
+            <div class="node-name">Pathology Lab DB</div>
+            <div class="node-status" id="vst-2">● SECURE</div>
+          </div>
+          <div class="vlan-node" id="vlan-3">
+            <div class="node-head"><span>VLAN_30</span><span>MQTT_TLS</span></div>
+            <div class="node-name">Blood Bank Cryo</div>
+            <div class="node-status" id="vst-3">● -78.4°C OK</div>
+          </div>
+          <div class="vlan-node" id="vlan-4">
+            <div class="node-head"><span>VLAN_40</span><span>HL7_FHIR</span></div>
+            <div class="node-name">ICU Telemetry</div>
+            <div class="node-status" id="vst-4">● 99.98% SYNC</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVE OSCILLOSCOPE -->
+      <div class="sub-panel" style="padding-top:12px; padding-bottom:12px;">
+        <div class="scope-wrap">
+          <div class="scope-overlay mono">
+            <span>CLOUDWATCH INGRESS PACKET ANOMALY STREAM (60FPS)</span>
+            <span id="scope-metrics">RATE: 142 req/s // JITTER: 1.1ms</span>
+          </div>
+          <canvas id="telemetry-scope"></canvas>
+        </div>
+      </div>
+
+      <!-- IMMUTABLE SECURITY LOG TABLE -->
+      <div class="log-container">
+        <div class="panel-header">
+          <span>03 // CLOUDTRAIL & IOT SHADOW AUDIT STREAM</span>
+          <span class="mono" style="color:var(--text-muted);">MAX_RETENTION: DYNAMODB</span>
+        </div>
+        <table class="data-table mono">
+          <thead>
+            <tr>
+              <th>TIMESTAMP</th>
+              <th>SEVERITY</th>
+              <th>TARGET SUBSYSTEM</th>
+              <th>EVENT SIGNATURE</th>
+              <th>ORIGIN IP</th>
+            </tr>
+          </thead>
+          <tbody id="audit-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- COLUMN 3: AWS IOT DEVICE SHADOW & SERVERLESS PIPELINE -->
+    <section class="col-right">
+      <div class="panel" style="flex:1;">
+        <div class="panel-header">
+          <span>04 // AWS IOT CORE SHADOW STATE</span>
+          <span class="mono" style="color:var(--c-blue);">$aws/things/CloudSecurityAlertLamp/shadow</span>
+        </div>
+
+        <div style="padding: 14px 16px; border-bottom: 1px solid var(--border-dim);">
+          <div style="font-size:10px; color:var(--text-muted); letter-spacing:0.8px; text-transform:uppercase;">
+            SERVERLESS EXECUTION TOPOLOGY
+          </div>
+          <div class="pipeline-flow mono">
+            <div class="pipe-step">
+              <div class="pipe-box" id="p-box-1">EventBridge</div>
+              <span>Trigger</span>
+            </div>
+            <span style="color:var(--text-muted);">──►</span>
+            <div class="pipe-step">
+              <div class="pipe-box" id="p-box-2">AWS Lambda</div>
+              <span>Python 3.12</span>
+            </div>
+            <span style="color:var(--text-muted);">──►</span>
+            <div class="pipe-step">
+              <div class="pipe-box" id="p-box-3">IoT Shadow</div>
+              <span>MQTT / TLS</span>
+            </div>
+          </div>
+        </div>
+
+        <pre class="code-inspector mono" id="json-viewer"></pre>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- AWS LAMBDA FUNCTION URL MODAL -->
+  <div class="modal-backdrop" id="aws-modal">
+    <div class="modal-window">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <span class="mono" style="font-weight:700; font-size:12px;">CONFIGURE LIVE AWS LAMBDA FUNCTION URL</span>
+        <span class="mono" style="cursor:pointer; color:var(--text-muted);" onclick="toggleAwsModal(false)">[ESC]</span>
+      </div>
+      <p style="font-size:12px; color:var(--text-secondary); line-height:1.5;">
+        Leave blank to run in <strong>Zero-Cost Local Shadow Simulation Mode</strong>. When you create your AWS Lambda Function URL in Phase 2, paste it below to dispatch real HTTP POST events to AWS IoT Core.
+      </p>
+      <input type="text" id="lambda-url-input" class="input-field" placeholder="https://xxxxxxxxxx.lambda-url.ap-south-1.on.aws/" />
+      <div class="btn-row">
+        <button class="cmd-btn" onclick="toggleAwsModal(false)">CANCEL</button>
+        <button class="cmd-btn primary" onclick="saveLambdaUrl()">BIND ENDPOINT</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 1. ENTERPRISE HOSPITAL LAB STATE DEFINITIONS
+    const STATES = {
+      SECURE: {
+        tier: "green",
+        tierCode: "L4_GREEN // NOMINAL",
+        hex: "#00E676",
+        glow: "rgba(0, 230, 118, 0.14)",
+        strobeClass: "",
+        hz: "0.0 Hz (SOLID)",
+        siren: "0 dB (SILENT)",
+        department: "Samraksha_Pathology_VLAN10",
+        incident: "KMS_S3_ENCRYPTION_VERIFIED",
+        source_ip: "10.20.4.12",
+        compliance: "HIPAA_PASS",
+        rate: "142 req/s // JITTER: 1.1ms",
+        waveAmp: 8,
+        waveFreq: 0.04,
+        compromisedVlan: null
+      },
+      WARNING: {
+        tier: "amber",
+        tierCode: "L2_AMBER // IAM_WARN",
+        hex: "#FFB000",
+        glow: "rgba(255, 176, 0, 0.16)",
+        strobeClass: "strobe-slow",
+        hz: "1.2 Hz (PULSE)",
+        siren: "68 dB (CHIME)",
+        department: "Samraksha_Toxicology_RDS_VLAN20",
+        incident: "IAM_ASSUME_ROLE_BRUTEFORCE",
+        source_ip: "103.45.88.19",
+        compliance: "AUDIT_FLAGGED",
+        rate: "890 req/s // JITTER: 14.8ms",
+        waveAmp: 22,
+        waveFreq: 0.09,
+        compromisedVlan: 2
+      },
+      BIO_HAZARD: {
+        tier: "blue",
+        tierCode: "L3_BLUE // COLD_CHAIN",
+        hex: "#00D2FF",
+        glow: "rgba(0, 210, 255, 0.16)",
+        strobeClass: "strobe-slow",
+        hz: "1.8 Hz (PULSE)",
+        siren: "78 dB (INTERMITTENT)",
+        department: "Samraksha_BloodBank_VLAN30",
+        incident: "MQTT_HEARTBEAT_SENSOR_SPOOF",
+        source_ip: "192.168.99.4",
+        compliance: "SAFETY_FAULT",
+        rate: "1,420 req/s // JITTER: 28.4ms",
+        waveAmp: 35,
+        waveFreq: 0.14,
+        compromisedVlan: 3
+      },
+      CRITICAL: {
+        tier: "red",
+        tierCode: "L1_RED // EXFIL_CRIT",
+        hex: "#FF2A4B",
+        glow: "rgba(255, 42, 75, 0.22)",
+        strobeClass: "strobe-fast",
+        hz: "3.5 Hz (STROBE)",
+        siren: "98 dB (SIREN ACTIVE)",
+        department: "Samraksha_EHR_S3_VLAN10",
+        incident: "S3_PUBLIC_ACCESS_BLOCK_DISABLED",
+        source_ip: "185.220.101.44",
+        compliance: "CRITICAL_BREACH",
+        rate: "4,950 req/s // JITTER: 74.2ms",
+        waveAmp: 52,
+        waveFreq: 0.22,
+        compromisedVlan: 1
+      }
+    };
+
+    let currentStateKey = "SECURE";
+    let lambdaFunctionUrl = localStorage.getItem("samraksha_lambda_url") || "";
+    let audioCtx = null;
+    let sirenInterval = null;
+
+    // Initialize AWS Endpoint Pill status on load
+    if (lambdaFunctionUrl) {
+      document.getElementById("aws-conn-dot").style.color = "var(--c-green)";
+      document.getElementById("aws-conn-label").innerText = "ENGINE: LIVE AWS LAMBDA SYNC";
+    }
+
+    // 2. DISPATCH STATE & UPDATE HARDWARE VIRTUAL TWIN
+    function dispatchEventState(stateKey) {
+      currentStateKey = stateKey;
+      const cfg = STATES[stateKey];
+
+      // Update Root CSS Variables for Glow & Accents
+      document.documentElement.style.setProperty("--active-accent", cfg.hex);
+      document.documentElement.style.setProperty("--active-glow", cfg.glow);
+
+      // Update Top Beacon
+      document.getElementById("header-beacon").style.background = cfg.hex;
+      document.getElementById("header-beacon").style.boxShadow = `0 0 14px ${cfg.hex}`;
+
+      // Reset and Light Up Appropriate Andon Tier
+      ["red", "amber", "blue", "green"].forEach(t => {
+        const seg = document.getElementById("tier-" + t);
+        seg.classList.remove("active", "strobe-fast", "strobe-slow");
+      });
+
+      const activeSeg = document.getElementById("tier-" + cfg.tier);
+      activeSeg.classList.add("active");
+      if (cfg.strobeClass) activeSeg.classList.add(cfg.strobeClass);
+
+      // Update Hardware Spec Readouts
+      document.getElementById("lamp-hz-readout").innerText = cfg.hz;
+      document.getElementById("spec-tier").innerText = cfg.tierCode;
+      document.getElementById("spec-tier").style.color = cfg.hex;
+      document.getElementById("spec-siren").innerText = cfg.siren;
+      document.getElementById("spec-ip").innerText = cfg.source_ip;
+      document.getElementById("spec-compliance").innerText = cfg.compliance;
+      document.getElementById("spec-compliance").style.color = stateKey === "CRITICAL" ? cfg.hex : "var(--text-primary)";
+      document.getElementById("scope-metrics").innerText = cfg.rate;
+
+      // Update Scenario Buttons Selected State
+      Object.keys(STATES).forEach(k => {
+        document.getElementById("btn-" + k).classList.toggle("selected", k === stateKey);
+      });
+
+      // Update Hospital VLAN Topology Grid
+      for (let i = 1; i <= 4; i++) {
+        const node = document.getElementById("vlan-" + i);
+        const stat = document.getElementById("vst-" + i);
+        if (cfg.compromisedVlan === i) {
+          node.classList.add("compromised");
+          stat.innerText = "● BREACHED";
+          stat.style.color = cfg.hex;
+        } else {
+          node.classList.remove("compromised");
+          stat.innerText = i === 3 ? "● -78.4°C OK" : (i === 4 ? "● 99.98% SYNC" : "● SECURE");
+          stat.style.color = "var(--c-green)";
+        }
+      }
+
+      // Build AWS IoT Core Device Shadow JSON Payload
+      const shadowPayload = {
+        state: {
+          desired: {
+            lamp_state: cfg.tierCode,
+            optic_channel: cfg.tier === "red" ? 1 : (cfg.tier === "amber" ? 2 : (cfg.tier === "blue" ? 3 : 4)),
+            hex: cfg.hex,
+            strobe_hz: cfg.hz,
+            piezo_siren: cfg.siren,
+            facility_unit: cfg.department,
+            incident_signature: cfg.incident,
+            source_ip: cfg.source_ip,
+            compliance_posture: cfg.compliance,
+            timestamp_utc: new Date().toISOString()
+          }
+        },
+        metadata: {
+          region: "ap-south-1",
+          iot_thing: "CloudSecurityAlertLamp"
+        }
+      };
+
+      // Syntax-highlight JSON Viewer
+      document.getElementById("json-viewer").innerHTML = syntaxHighlightJson(shadowPayload);
+
+      // Append Audit Log Row
+      appendAuditRow(stateKey, cfg.hex, cfg.department, cfg.incident, cfg.source_ip);
+
+      // Trigger Piezo Acoustic Siren Tone
+      handleAcousticAlarm(stateKey);
+
+      // If AWS Lambda URL is bound, dispatch real HTTP POST
+      if (lambdaFunctionUrl) {
+        fetch(lambdaFunctionUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ severity: stateKey, department: cfg.department, incident: cfg.incident, source_ip: cfg.source_ip })
+        }).catch(err => console.error("AWS Lambda Sync Error:", err));
+      }
+    }
+
+    // 3. SYNTAX HIGHLIGHTER FOR JSON SHADOW VIEWER
+    function syntaxHighlightJson(obj) {
+      const json = JSON.stringify(obj, null, 2);
+      return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, match => {
+        let cls = "json-bool";
+        if (/^"/.test(match)) {
+          cls = /:$/.test(match) ? "json-key" : "json-str";
+        }
+        return `<span class="${cls}">${match}</span>`;
+      });
+    }
+
+    // 4. AUDIT LOG STREAM APPEND
+    function appendAuditRow(sev, color, target, eventSig, ip) {
+      const tbody = document.getElementById("audit-tbody");
+      const tr = document.createElement("tr");
+      const timeStr = new Date().toISOString().split("T")[1].slice(0, 8);
+
+      tr.innerHTML = `
+        <td>${timeStr}</td>
+        <td><span class="sev-pill" style="color:${color}; background:${color}15;">${sev}</span></td>
+        <td style="color:var(--text-primary); font-weight:600;">${target}</td>
+        <td>${eventSig}</td>
+        <td>${ip}</td>
+      `;
+      tbody.prepend(tr);
+      if (tbody.children.length > 15) tbody.removeChild(tbody.lastChild);
+    }
+
+    // 5. WEB AUDIO API PIEZO TRANSDUCER SYNTHESIZER
+    function handleAcousticAlarm(stateKey) {
+      if (sirenInterval) {
+        clearInterval(sirenInterval);
+        sirenInterval = null;
+      }
+      if (document.getElementById("audio-mute").checked || stateKey === "SECURE") return;
+
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+
+      const playTone = (freq1, freq2, duration) => {
+        if (document.getElementById("audio-mute").checked) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = stateKey === "CRITICAL" ? "sawtooth" : "triangle";
+        osc.frequency.setValueAtTime(freq1, audioCtx.currentTime);
+        if (freq2) osc.frequency.linearRampToValueAtTime(freq2, audioCtx.currentTime + duration);
+
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      };
+
+      if (stateKey === "WARNING") {
+        playTone(680, 520, 0.2);
+      } else if (stateKey === "BIO_HAZARD") {
+        playTone(880, 880, 0.15);
+        sirenInterval = setInterval(() => playTone(880, 880, 0.15), 1200);
+      } else if (stateKey === "CRITICAL") {
+        playTone(660, 1320, 0.35);
+        sirenInterval = setInterval(() => playTone(660, 1320, 0.35), 400);
+      }
+    }
+
+    // 6. REAL-TIME CANVAS OSCILLOSCOPE (60FPS)
+    const canvas = document.getElementById("telemetry-scope");
+    const ctx = canvas.getContext("2d");
+    let waveOffset = 0;
+
+    function resizeCanvas() {
+      canvas.width = canvas.clientWidth * window.devicePixelRatio;
+      canvas.height = canvas.clientHeight * window.devicePixelRatio;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    function renderOscilloscope() {
+      const cfg = STATES[currentStateKey];
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      // Grid Lines
+      ctx.strokeStyle = "rgba(40, 53, 74, 0.35)";
+      ctx.lineWidth = 1;
+      for (let y = 0; y < h; y += h / 3) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      // Waveform Path
+      ctx.beginPath();
+      const step = w / 120;
+      for (let i = 0; i <= 120; i++) {
+        const x = i * step;
+        const noise = (Math.random() - 0.5) * (cfg.waveAmp * 0.15);
+        const y = (h / 2) + Math.sin(i * cfg.waveFreq + waveOffset) * cfg.waveAmp + noise;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+
+      ctx.strokeStyle = cfg.hex;
+      ctx.lineWidth = 2 * window.devicePixelRatio;
+      ctx.stroke();
+
+      // Area Fill
+      ctx.lineTo(w, h);
+      ctx.lineTo(0, h);
+      ctx.closePath();
+      ctx.fillStyle = cfg.glow;
+      ctx.fill();
+
+      waveOffset += 0.12;
+      requestAnimationFrame(renderOscilloscope);
+    }
+
+    // 7. KEYBOARD SHORTCUTS [1-4]
+    window.addEventListener("keydown", (e) => {
+      if (document.getElementById("aws-modal").classList.contains("open")) return;
+      if (e.key === "1") dispatchEventState("SECURE");
+      if (e.key === "2") dispatchEventState("WARNING");
+      if (e.key === "3") dispatchEventState("BIO_HAZARD");
+      if (e.key === "4") dispatchEventState("CRITICAL");
+    });
+
+    // 8. UTC CLOCK TICKER
+    setInterval(() => {
+      const now = new Date();
+      document.getElementById("live-clock").innerText = now.toISOString().split("T")[1].slice(0, 8);
+    }, 1000);
+
+    // 9. AWS LAMBDA MODAL CONTROLS
+    function toggleAwsModal(open) {
+      const modal = document.getElementById("aws-modal");
+      modal.classList.toggle("open", open);
+      if (open && lambdaFunctionUrl) {
+        document.getElementById("lambda-url-input").value = lambdaFunctionUrl;
+      }
+    }
+
+    function saveLambdaUrl() {
+      const url = document.getElementById("lambda-url-input").value.trim();
+      lambdaFunctionUrl = url;
+      localStorage.setItem("samraksha_lambda_url", url);
+      toggleAwsModal(false);
+
+      if (url) {
+        document.getElementById("aws-conn-dot").style.color = "var(--c-green)";
+        document.getElementById("aws-conn-label").innerText = "ENGINE: LIVE AWS LAMBDA SYNC";
+      } else {
+        document.getElementById("aws-conn-dot").style.color = "var(--c-amber)";
+        document.getElementById("aws-conn-label").innerText = "ENGINE: LOCAL SHADOW SIM";
+      }
+    }
+
+    // Initialize on Page Load
+    dispatchEventState("SECURE");
+    requestAnimationFrame(renderOscilloscope);
+  </script>
+</body>
+</html>
